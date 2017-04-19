@@ -378,9 +378,9 @@ class ConsoleSink(Sink):
      +-------+
 """
     def push(self, msg):
-        print ">%r" % msg
+        print ">%r" % (msg,)
     def high_push(self, msg):
-        print ">>%r" % msg
+        print ">>%r" % (msg,)
 
 class RawConsoleSink(Sink):
     """Print messages on low and high entries
