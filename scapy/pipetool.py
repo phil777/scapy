@@ -41,7 +41,7 @@ class PipeEngine:
         self._add_pipes(*pipes)
         self.thread_lock = thread.allocate_lock()
         self.command_lock = thread.allocate_lock()
-        self.__fdr,self.__fdw = os.pipe()
+        self.__cmd2thread_r,self.__cmd2thread_w = os.pipe()
         self.threadid = None
     def __getattr__(self, attr):
         if attr.startswith("spawn_"):
@@ -90,15 +90,15 @@ class PipeEngine:
             for p in self.active_pipes:
                 p.start()
             sources = self.active_sources
-            sources.add(self.__fdr)
+            sources.add(self.__cmd2thread_r)
             exhausted = set([])
             RUN=True
             STOP_IF_EXHAUSTED = False
             while RUN and (not STOP_IF_EXHAUSTED or len(sources) > 1):
                 fds,fdo,fde=select.select(sources,[],[])
                 for fd in fds:
-                    if fd is self.__fdr:
-                        cmd = os.read(self.__fdr,1)
+                    if fd is self.__cmd2thread_r:
+                        cmd = os.read(self.__cmd2thread_r,1)
                         if cmd == "X":
                             RUN=False
                             break
@@ -106,7 +106,7 @@ class PipeEngine:
                             STOP_IF_EXHAUSTED = True
                         elif cmd == "A":
                             sources = self.active_sources-exhausted
-                            sources.add(self.__fdr)
+                            sources.add(self.__cmd2thread_r)
                         else:
                             warning("Unknown internal pipe engine command: %r. Ignoring." % cmd)
                     elif fd in sources:
@@ -123,7 +123,10 @@ class PipeEngine:
         finally:
             try:
                 for p in self.active_pipes:
-                    p.stop()
+                    try:
+                        p.stop()
+                    except:
+                        pass
             finally:
                 self.thread_lock.release()
                 log_interactive.info("Pipe engine thread stopped.")
@@ -139,7 +142,7 @@ class PipeEngine:
         try:
             with self.command_lock:
                 if self.threadid is not None:
-                    os.write(self.__fdw, _cmd)
+                    os.write(self.__cmd2thread_w, _cmd)
                     while not self.thread_lock.acquire(0):
                         time.sleep(0.01) # interruptible wait for thread to terminate
                     self.thread_lock.release() # (not using .join() because it needs 'threading' module)
@@ -154,7 +157,7 @@ class PipeEngine:
             if self.threadid is not None:
                 for p in pipes:
                     p.start()
-                os.write(self.__fdw, "A")
+                os.write(self.__cmd2thread_w, "A")
     
     def graph(self,**kargs):
         g=['digraph "pipe" {',"\tnode [shape=rectangle];",]
