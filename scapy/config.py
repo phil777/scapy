@@ -815,6 +815,7 @@ class Conf(ConfClass):
         'ipsec',
         'ir',
         'isakmp',
+        'knx',
         'l2',
         'l2tp',
         'llmnr',
